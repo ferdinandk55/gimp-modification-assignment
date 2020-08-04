@@ -1,0 +1,4 @@
+Makefile
+Makefile.in
+gimp-core-pixbufs.gresource.xml
+gimp-icon-pixbufs.gresource.xml

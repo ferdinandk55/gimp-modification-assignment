@@ -1,0 +1,6 @@
+/.deps
+/.libs
+/Makefile
+/Makefile.in
+/goat-exercise-c
+/goat-exercise-c.exe

@@ -1,0 +1,6 @@
+/.deps
+/.dirstamp
+/Makefile
+/Makefile.in
+/lighting-icon-images.c
+/lighting-icon-images.h

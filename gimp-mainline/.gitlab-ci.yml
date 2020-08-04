@@ -1,0 +1,315 @@
+image: debian:testing
+
+stages:
+  - prepare
+  - dependencies
+  - gimp
+  - analysis
+
+variables:
+  GIT_DEPTH: "1"
+  INSTALL_DIR: "_install"
+  INSTALL_PREFIX: "${CI_PROJECT_DIR}/${INSTALL_DIR}"
+  APT_CACHE: "${CI_PROJECT_DIR}/apt-cache"
+
+## prepare docker images ##
+
+build-image:
+  stage: prepare
+  variables:
+    GIT_STRATEGY: none
+  cache: {}
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - echo "FROM debian:testing" > Dockerfile
+    - echo "RUN apt-get update" >> Dockerfile
+    - echo "RUN apt-get install -y --no-install-recommends \\" >> Dockerfile
+    - echo "at-spi2-core build-essential desktop-file-utils ffmpeg ghostscript git glib-networking gobject-introspection graphviz-dev gtk-doc-tools hicolor-icon-theme intltool iso-codes libappstream-glib-dev libbz2-dev libdbus-glib-1-dev libexif-dev libgexiv2-dev libgirepository1.0-dev libgtk-3-bin libgtk-3-dev libgudev-1.0-dev libjson-glib-dev liblcms2-dev liblzma-dev libmng-dev libmypaint-dev libopenexr-dev libpoppler-glib-dev libraw-dev libraw19 librsvg2-dev libspiro-dev libsuitesparse-dev libtiff-dev libtiff5-dev libtool libumfpack5 libwebp-dev libwmf-dev libxmu-dev libxpm-dev luajit meson mypaint-brushes poppler-data python3 valac xauth xvfb" >> Dockerfile
+
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/Dockerfile --destination $CI_REGISTRY_IMAGE:build-debian-latest --cache=true --cache-ttl=120h
+
+
+build-image-win64:
+  stage: prepare
+  variables:
+    GIT_STRATEGY: none
+  cache: {}
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - echo "FROM debian:testing" > Dockerfile
+    - echo "RUN apt-get update" >> Dockerfile
+    - echo "RUN apt-get install -y --no-install-recommends \\" >> Dockerfile
+    - echo "build-essential cpio g++-mingw-w64-x86-64 gcc-mingw-w64-x86-64 git intltool libgdk-pixbuf2.0-dev libglib2.0-bin meson pkg-config python3 python3-distutils python3-docutils python3-pip rpm xsltproc" >> Dockerfile
+
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/Dockerfile --destination $CI_REGISTRY_IMAGE:build-win64-latest --cache=true --cache-ttl=120h
+
+
+build-image-win32:
+  stage: prepare
+  variables:
+    GIT_STRATEGY: none
+  cache: {}
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - echo "FROM debian:testing" > Dockerfile
+    - echo "RUN apt-get update" >> Dockerfile
+    - echo "RUN apt-get install -y --no-install-recommends \\" >> Dockerfile
+    - echo "build-essential cpio g++-mingw-w64-i686 gcc-mingw-w64-i686 git intltool libgdk-pixbuf2.0-dev libglib2.0-bin meson pkg-config python3 python3-distutils python3-docutils python3-pip rpm xsltproc" >> Dockerfile
+
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/Dockerfile --destination $CI_REGISTRY_IMAGE:build-win32-latest --cache=true --cache-ttl=120h
+
+
+## GNU/Linux 64-bit CIs ##
+
+deps-debian/testing:
+  stage: dependencies
+  image: $CI_REGISTRY_IMAGE:build-debian-latest
+  cache:
+    paths:
+    - apt-cache
+  artifacts:
+    expire_in: 2 hours
+    when: always
+    paths:
+    - "${INSTALL_DIR}"
+    - _babl/_build
+    - _gegl/_build
+  before_script:
+    - git clone --depth=${GIT_DEPTH} https://gitlab.gnome.org/GNOME/babl.git _babl
+    - git clone --depth=${GIT_DEPTH} https://gitlab.gnome.org/GNOME/gegl.git _gegl
+    - export PKG_CONFIG_PATH="${INSTALL_PREFIX}/lib/pkgconfig"
+    - export PKG_CONFIG_PATH="${INSTALL_PREFIX}/lib/`gcc -print-multiarch`/pkgconfig/:$PKG_CONFIG_PATH"
+    - export LD_LIBRARY_PATH="${INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}"
+    - export LD_LIBRARY_PATH="${INSTALL_PREFIX}/lib/`gcc -print-multiarch`:$LD_LIBRARY_PATH"
+    - export XDG_DATA_DIRS="${INSTALL_PREFIX}/share:/usr/local/share:/usr/share"
+  script:
+    - cd _babl
+    - meson -Dprefix="${INSTALL_PREFIX}" _build
+    - ninja -C _build
+    - ninja -C _build install
+    - cd ../_gegl
+    - meson --prefix="${INSTALL_PREFIX}" _build
+    - ninja -C _build
+    - ninja -C _build install
+  needs: ["build-image"]
+
+.gimp-debian/testing-base:
+  stage: gimp
+  image: $CI_REGISTRY_IMAGE:build-debian-latest
+  dependencies:
+    - deps-debian/testing
+  cache:
+    paths:
+    - apt-cache
+  artifacts:
+    expire_in: 1 days
+    when: always
+    name: "app-build-${CI_JOB_NAME}-${CI_COMMIT_REF_NAME}"
+    paths:
+    - _build
+    #- "${INSTALL_DIR}"
+  before_script:
+    - export PKG_CONFIG_PATH="${INSTALL_PREFIX}/lib/pkgconfig:${INSTALL_PREFIX}/share/pkgconfig"
+    - export PKG_CONFIG_PATH="${INSTALL_PREFIX}/lib/`gcc -print-multiarch`/pkgconfig/:$PKG_CONFIG_PATH"
+    - export PKG_CONFIG_PATH="${INSTALL_PREFIX}/share/`gcc -print-multiarch`/pkgconfig/:$PKG_CONFIG_PATH"
+    - export LD_LIBRARY_PATH="${INSTALL_PREFIX}/lib:${LD_LIBRARY_PATH}"
+    - export LD_LIBRARY_PATH="${INSTALL_PREFIX}/lib/`gcc -print-multiarch`:$LD_LIBRARY_PATH"
+    - export XDG_DATA_DIRS="${INSTALL_PREFIX}/share:/usr/local/share:/usr/share"
+    - export PATH="${INSTALL_PREFIX}/bin:$PATH"
+  needs: ["deps-debian/testing"]
+
+gimp-debian/testing-autotools:
+  extends: .gimp-debian/testing-base
+  script:
+    - mkdir _build
+    - cd _build
+    - ../autogen.sh
+        --prefix="${INSTALL_PREFIX}"
+        --enable-debug
+        --with-python=force
+        --with-javascript=force
+        --with-lua=force
+    - make -j "$(nproc)"
+    - make check
+
+gimp-debian/testing-meson:
+  extends: .gimp-debian/testing-base
+  script:
+    - meson _build
+      --prefix="${INSTALL_PREFIX}"
+      -Dpython=always
+      -Djavascript=always
+      -Dlua=always
+    - ninja -C _build
+    - ninja -C _build test
+
+gimp-debian/testing-clang:
+  extends: .gimp-debian/testing-base
+  variables:
+    CC: "clang"
+    CXX: "clang++"
+  script:
+    - mkdir -p "$APT_CACHE"
+    - apt-get install -y --no-install-recommends -o dir::cache::archives="$APT_CACHE"
+        clang libomp-dev
+    - meson _build
+      --prefix="${INSTALL_PREFIX}"
+      -Dpython=always
+      -Djavascript=always
+      -Dlua=always
+    - ninja -C _build
+    - ninja -C _build test
+
+## WINDOWS 64-bit CI ##
+
+deps-win64:
+  stage: dependencies
+  image: $CI_REGISTRY_IMAGE:build-win64-latest
+  variables:
+    XDG_CACHE_HOME: "$CI_PROJECT_DIR/.cache/"
+    XDG_DATA_HOME:  "$CI_PROJECT_DIR/.local/share/"
+  cache:
+    paths:
+    - .cache/crossroad/
+    - apt-cache
+  before_script:
+    - git clone --depth=${GIT_DEPTH} git://git.tuxfamily.org/gitroot/crossroad/crossroad.git
+    - cd crossroad
+    - ./setup.py install --prefix=`pwd`/../.local
+    - cd ..
+    - pip3 install zstandard
+  script:
+    - export PATH="`pwd`/.local/bin:$PATH"
+    - crossroad w64 gimp --run="build/windows/crossbuild-gitlab-ci/build-deps.sh"
+  artifacts:
+    name: "${CI_JOB_NAME}-${CI_COMMIT_REF_NAME}"
+    when: always
+    expire_in: 2 hours
+    paths:
+      - .local/
+      - _deps/
+  needs: ["build-image-win64"]
+
+gimp-win64:
+  stage: gimp
+  image: $CI_REGISTRY_IMAGE:build-win64-latest
+  dependencies:
+    - deps-win64
+  variables:
+    XDG_CACHE_HOME: "$CI_PROJECT_DIR/.cache/"
+    XDG_DATA_HOME:  "$CI_PROJECT_DIR/.local/share/"
+  cache:
+    paths:
+    - .cache/crossroad/
+    - apt-cache
+  script:
+    - export PATH="`pwd`/.local/bin:$PATH"
+    - mkdir _build && cd _build
+    - echo 'crossroad meson ..
+              -Dgtk-doc=false
+              -Dpython=always -Dlua=always
+              -Djavascript=always && ninja install &&
+            cp ../build/windows/crossbuild-gitlab-ci/gimp-wrapper.cmd $CROSSROAD_PREFIX/bin/ &&
+            cp -fr $CROSSROAD_PREFIX/ ../gimp-prefix/
+            ' |
+      crossroad w64 gimp --run="-"
+  needs: ["deps-win64"]
+  artifacts:
+    name: "${CI_JOB_NAME}-${CI_COMMIT_REF_NAME}"
+    when: always
+    expire_in: 1 day
+    paths:
+      - _build/
+      - gimp-prefix/
+
+## WINDOWS 32-bit CI ##
+
+deps-win32:
+  stage: dependencies
+  image: $CI_REGISTRY_IMAGE:build-win32-latest
+  variables:
+    XDG_CACHE_HOME: "$CI_PROJECT_DIR/.cache/"
+    XDG_DATA_HOME:  "$CI_PROJECT_DIR/.local/share/"
+  cache:
+    paths:
+    - .cache/crossroad/
+    - apt-cache
+  before_script:
+    - git clone --depth=${GIT_DEPTH} git://git.tuxfamily.org/gitroot/crossroad/crossroad.git
+    - cd crossroad
+    - ./setup.py install --prefix=`pwd`/../.local
+    - cd ..
+    - pip3 install zstandard
+  script:
+    - export PATH="`pwd`/.local/bin:$PATH"
+    - crossroad w32 gimp --run="build/windows/crossbuild-gitlab-ci/build-deps.sh"
+  artifacts:
+    name: "${CI_JOB_NAME}-${CI_COMMIT_REF_NAME}"
+    when: always
+    expire_in: 2 hours
+    paths:
+      - .local/
+      - _deps/
+  needs: ["build-image-win32"]
+
+gimp-win32:
+  stage: gimp
+  image: $CI_REGISTRY_IMAGE:build-win32-latest
+  dependencies:
+    - deps-win32
+  variables:
+    XDG_CACHE_HOME: "$CI_PROJECT_DIR/.cache/"
+    XDG_DATA_HOME:  "$CI_PROJECT_DIR/.local/share/"
+  cache:
+    paths:
+    - .cache/crossroad/
+    - apt-cache
+  script:
+    - export PATH="`pwd`/.local/bin:$PATH"
+    - mkdir _build && cd _build
+    - echo 'crossroad meson ..
+              -Dwmf=disabled  -Dgtk-doc=false
+              -Dpython=always -Dlua=always
+              -Djavascript=always && ninja install &&
+            cp ../build/windows/crossbuild-gitlab-ci/gimp-wrapper.cmd $CROSSROAD_PREFIX/bin/ &&
+            cp -fr $CROSSROAD_PREFIX/ ../gimp-prefix/
+            ' |
+      crossroad w32 gimp --run="-"
+  needs: ["deps-win32"]
+  artifacts:
+    name: "${CI_JOB_NAME}-${CI_COMMIT_REF_NAME}"
+    when: always
+    expire_in: 1 day
+    paths:
+      - _build/
+      - gimp-prefix/
+
+cppcheck:
+  stage: analysis
+  before_script:
+    - apt-get update
+    - apt-get install -y cppcheck
+  script:
+    - cppcheck -q -j8 --enable=all --force --output-file=cppcheck.xml --xml --xml-version=2
+        -i _build -i _deps -i gimp-prefix -i .local -i .cache .
+    - mkdir report
+    - cppcheck-htmlreport --source-dir=. --title=gimp --file=cppcheck.xml --report-dir=report
+  artifacts:
+    name: "${CI_JOB_NAME}-${CI_COMMIT_REF_NAME}"
+    expire_in: 1 week
+    when: always
+    paths:
+      - report
+  needs: []

@@ -1,0 +1,13 @@
+/Makefile
+/Makefile.in
+/makefile.mingw
+/.dirstamp
+/*.lo
+/_libs
+/.libs
+/.deps
+/*.la
+/gimpversion.h
+/*.lib
+/*.exp
+/xgen-cec

@@ -1,0 +1,122 @@
+                   ------------------------------
+                   GNU Image Manipulation Program
+                         Development Branch
+                   ------------------------------
+
+This is the unstable branch of GIMP.
+
+
+Overview of Changes from GIMP 2.10.x to GIMP 2.99.2
+===================================================
+
+Core:
+
+  - Improved "space invasion".
+  - New extension format support (.gex a.k.a. GIMP Extension) which is
+    an archive containing various supported data. So far, it can
+    package: brushes, MyPaint brushes, dynamics, patterns, gradients,
+    palettes, tool presets, plug-ins, splash images and themes.
+  - New extension manager allowing to enable, disable or uninstall
+    installed extensions, with a dialog available in `Edit > Manage
+    Extensions`.
+  - Multi selection of layers now possible. Various tools and features
+    are now multi-selection aware.
+  - XCF format bumped to version 14 with awareness of multiple layer
+    selection.
+  - All code is year-2038-safe with deprecated time API replaced.
+  - "Alpha to Selection" various actions warn when the result selection
+    is empty.
+
+User Interface:
+
+  - Whole interface ported to GTK+3:
+    * Proper HiDPI support, which will follow the system's scale factor
+      for all widgets. This is a core toolkit support, unlike the basic
+      better-than-nothing hacks from GIMP 2.10.x.
+    * GTK+3 CSS-like support. All themes for former versions are
+      therefore not working anymore.
+    * GTK+3 themes have the concept of "dark variant", so a same theme
+      may propose both a light and a dark versions. Preference for dark
+      variants can now be checked in `Preferences > Themes > Use dark
+      theme variant if available` checkbox, allowing for instance to use
+      your system theme in its light variant everywhere except in GIMP.
+      This option is checked by default as graphics software are often
+      prefered in dark modes.
+    * Symbolic icon themes are now recolored automatically according to
+      the theme colors (no theme and icon theme tweaking anymore to end
+      up with dark on dark or light on light interfaces), except for
+      color elements whose SVG style is marked as "!important".
+    * Native Wayland support.
+    * Various dialogs now use Client-Side decorations and modern GTK+
+      widgets are being used when relevant.
+  - Image display rendered faster with a render cache that keeps the
+    result of scaling, color management, display filters and shell mask
+    (for tools like fuzzy select).
+  - Shift-click on layer GimpContainerTreeView (typically the Layers
+    dockable) allows to expand/collapse all item groups but the clicked
+    one.
+
+Devices:
+
+  - Device hotplug supported (thanks to GTK+3). In particular:
+    * you don't need to have your tablets and other devices plugged
+      before you start GIMP anymore;
+    * enabling your devices in the "Configure Input Devices" dialog is
+      not needed anymore. Tablets will work out-of-the box;
+    * you can safely unplug and replug the same or other input devices
+      while GIMP is running.
+
+Plug-ins:
+
+  - Major rewrite of the API. So GIMP 2.10.x plug-ins and below must be
+    ported to the new API.
+  - Various objects are now proper GObject in the plug-in API, and not
+    just ID integers.
+  - The API is GObject Introspected, which means plug-ins can be written
+    in various non-C languages. So far the following languages have been
+    tested and work well: Python 3, Lua, Javascript and Vala.
+    (Note: Python 2 is also still working, but considering that this
+    language is end-of-life since 2020, we don't really care).
+  - Every introspected binding which we test comes with a "Goat
+    Exercise", which is a demo plug-in popping a dialog and showing its
+    own source code. It processes a simple "gegl:invert" operation on a
+    drawable. All "Goat Exercises" must do the same thing in the same
+    way, simply in their respective languages, as documentation/example
+    code for a language binding.
+  - Plug-ins must be installed in their own subdirectory in
+    `$XDG_CONFIG_HOME/GIMP/2.99/plug-ins/`, thus preventing data mess
+    (with plug-ins coming with data and installing it all in the root
+    plug-ins/ directory) and DLL hell. The main plug-in executable must
+    be named the same as the directory (possibly with an added
+    extension).
+    E.g.: `plug-ins/my-cool-plug-in/my-cool-plug-in.py`
+
+Documentation:
+
+  - `devel-docs/xcf.txt` updated to handle XCF 14.
+
+Build:
+
+  - New meson build system. Still deemed "experimental" for the time
+    being. Packagers are recommended to continue using the autotools
+    build system in order to avoid specific bugs.
+  - Continuous integration in Gitlab with:
+    - an autotools build with GCC on a Debian/testing runner
+    - a meson build with GCC on a Debian/testing runner
+    - a meson build with Clang on a Debian/testing runner
+    - a meson cross-build with Mingw-w64 for Windows 32-bit
+    - a meson cross-build with Mingw-w64 for Windows 64-bit
+    - static code analysis with cppcheck
+
+Known blocker issues:
+
+  - GTK+3 port is functional but not complete as some deprecated APIs
+    are still being used.
+  - Space invasion is still a work-in-progress.
+  - Plug-ins API update is still a work-in-progress.
+  - GIMP extensions are still a work-in-progress.
+  - Multiple layer selection is still work-in-progress. Some issues are
+    expected, and possibly even some crashes in code paths which were
+    not updated yet.
+  - No custom theme yet, in particular we want a neutral gray theme with
+    light/dark variants, and likely a middle-gray theme too.
